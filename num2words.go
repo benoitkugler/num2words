@@ -59,7 +59,7 @@ func init() {
 }
 
 type numWord struct {
-	num  int
+	num  int64
 	word string
 }
 
@@ -80,7 +80,7 @@ func merge(curr, next textNum) textNum {
 			return next
 		}
 	} else {
-		if (((curr.num-80)%100 == 0) || (curr.num%100 == 0 && curr.num < 1000)) && next.num < 1000000 && curr.text[:len(curr.text)-1] == "s" {
+		if (((curr.num-80)%100 == 0) || (curr.num%100 == 0 && curr.num < 1000)) && next.num < 1000000 && curr.text[len(curr.text)-1:] == "s" {
 			curr.text = curr.text[:len(curr.text)-1]
 		}
 		if curr.num < 1000 && next.num != 1000 && next.text[len(next.text)-1:] != "s" && next.num%100 == 0 {
@@ -115,10 +115,8 @@ func pluralizeEuros(n int64) string {
 
 func parse_currency_parts(value float64) (int64, int64, bool) {
 	negative := value < 0
-	inCents := int64(value * 100)
-	cents := inCents % 100
-	integer := (inCents - cents) / 100
-	return integer, cents, negative
+	inCents := int64(math.Round(value * 100))
+	return inCents / 100, inCents % 100, negative
 }
 
 func splitnum(value int64) []tNorList {
@@ -202,7 +200,6 @@ func EurosToWords(val float64) string {
 	separator := " et" //Cent separator
 
 	left, right, is_negative := parse_currency_parts(val)
-
 	minus_str := ""
 	if is_negative {
 		minus_str = fmt.Sprintf("%s ", negword)
