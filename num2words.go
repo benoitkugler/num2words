@@ -3,101 +3,10 @@ package num2words
 import (
 	"fmt"
 	"math"
-	"sort"
 	"strings"
 )
 
-const (
-	negword     = "moins "
-	GIGA_SUFFIX = "illiard"
-	MEGA_SUFFIX = "illion"
-)
-
-var (
-	cards     = map[int64]string{}
-	keysCards []int64 // triée par ordre décroissant
-	MAXVAL    int64
-)
-
-func init() {
-	high_numwords := []string{"b", "m"}
-
-	mid_numwords := []numWord{
-		{num: 1000, word: "mille"},
-		{num: 100, word: "cent"},
-		{num: 80, word: "quatre-vingts"},
-		{num: 60, word: "soixante"},
-		{num: 50, word: "cinquante"},
-		{num: 40, word: "quarante"},
-		{num: 30, word: "trente"},
-	}
-
-	low_numwords := []string{"vingt", "dix-neuf", "dix-huit", "dix-sept",
-		"seize", "quinze", "quatorze", "treize", "douze",
-		"onze", "dix", "neuf", "huit", "sept", "six",
-		"cinq", "quatre", "trois", "deux", "un", "zéro"}
-
-	for _, numWord := range mid_numwords {
-		cards[int64(numWord.num)] = numWord.word
-	}
-
-	for index, word := range low_numwords {
-		cards[int64(len(low_numwords)-1-index)] = word
-	}
-
-	cap := 3 + 6*len(high_numwords)
-	for index, word := range high_numwords {
-		n := cap - index*6
-		cards[int64(math.Pow10(n))] = word + GIGA_SUFFIX
-		cards[int64(math.Pow10(n-3))] = word + MEGA_SUFFIX
-	}
-	for key := range cards {
-		keysCards = append(keysCards, key)
-	}
-	sort.Slice(keysCards, func(i, j int) bool { return keysCards[i] > keysCards[j] })
-	MAXVAL = keysCards[0]
-}
-
-type numWord struct {
-	num  int64
-	word string
-}
-
-type textNum struct {
-	text string
-	num  int64
-}
-
-// si List vaut nil, représente un textNum.
-type tNorList struct {
-	tN   textNum
-	list []tNorList
-}
-
-func merge(curr, next textNum) textNum {
-	if curr.num == 1 {
-		if next.num < 1000000 {
-			return next
-		}
-	} else {
-		if (((curr.num-80)%100 == 0) || (curr.num%100 == 0 && curr.num < 1000)) && next.num < 1000000 && curr.text[len(curr.text)-1:] == "s" {
-			curr.text = curr.text[:len(curr.text)-1]
-		}
-		if curr.num < 1000 && next.num != 1000 && next.text[len(next.text)-1:] != "s" && next.num%100 == 0 {
-			next.text += "s"
-		}
-	}
-	if next.num < curr.num && curr.num < 100 {
-		if next.num%10 == 1 && curr.num != 80 {
-			return textNum{text: fmt.Sprintf("%s et %s", curr.text, next.text), num: curr.num + next.num}
-		}
-		return textNum{text: fmt.Sprintf("%s-%s", curr.text, next.text), num: curr.num + next.num}
-	}
-	if next.num > curr.num {
-		return textNum{text: fmt.Sprintf("%s %s", curr.text, next.text), num: curr.num * next.num}
-	}
-	return textNum{text: fmt.Sprintf("%s %s", curr.text, next.text), num: curr.num + next.num}
-}
+const negword = "moins "
 
 func pluralizeCents(n int64) string {
 	if n == 1 {
@@ -119,80 +28,140 @@ func parse_currency_parts(value float64) (int64, int64, bool) {
 	return inCents / 100, inCents % 100, negative
 }
 
-func splitnum(value int64) []tNorList {
-	for _, elem := range keysCards {
-		if elem > value {
-			continue
-		}
-		var div, mod int64
-		out := []tNorList{}
-		if value == 0 {
-			div, mod = 1, 0
-		} else {
-			div, mod = value/elem, value%elem
-		}
+func integerToTriplets(number int) []int {
+	triplets := []int{}
 
-		if div == 1 {
-			out = append(out, tNorList{tN: textNum{text: cards[1], num: 1}})
-		} else {
-			if div == value { // The system tallies, eg Roman Numerals
-				return []tNorList{{tN: textNum{text: strings.Repeat(cards[elem], int(div)), num: div * elem}}}
-			}
-			out = append(out, tNorList{list: splitnum(div)})
-		}
-		out = append(out, tNorList{tN: textNum{text: cards[elem], num: elem}})
-
-		if mod != 0 {
-			out = append(out, tNorList{list: splitnum(mod)})
-		}
-		return out
+	for number > 0 {
+		triplets = append(triplets, number%1000)
+		number = number / 1000
 	}
-	return nil
+
+	return triplets
 }
 
-func clean(val []tNorList) tNorList {
-	out := val
-	for len(val) != 1 {
-		out = []tNorList{}
-		left, right := val[0], val[1]
-		// if isinstance(left, tuple) and isinstance(right, tuple):
-		if left.list == nil && right.list == nil {
-			out = append(out, tNorList{tN: merge(left.tN, right.tN)})
-			if len(val) > 2 {
-				out = append(out, tNorList{list: val[2:]})
-			}
-		} else {
-			for _, elem := range val {
-				if elem.list != nil {
-					if len(elem.list) == 1 {
-						out = append(out, elem.list[0])
-					} else {
-						out = append(out, clean(elem.list))
-					}
+// IntegerToFrFr converts an integer to French words
+func IntegerToFrFr(input int) string {
+	var frenchMegas = []string{"", "mille", "million", "milliard", "billion", "billiard", "trillion", "trilliard", "quadrillion", "quadrilliard", "quintillion", "quintilliard"}
+	var frenchUnits = []string{"", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"}
+	var frenchTens = []string{"", "dix", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante", "quatre-vingt", "quatre-vingt"}
+	var frenchTeens = []string{"dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"}
+
+	//log.Printf("Input: %d\n", input)
+	words := []string{}
+
+	if input < 0 {
+		words = append(words, "moins")
+		input *= -1
+	}
+
+	// split integer in triplets
+	triplets := integerToTriplets(input)
+	//log.Printf("Triplets: %v\n", triplets)
+
+	// zero is a special case
+	if len(triplets) == 0 {
+		return "zéro"
+	}
+
+	// iterate over triplets
+	for idx := len(triplets) - 1; idx >= 0; idx-- {
+		triplet := triplets[idx]
+		//log.Printf("Triplet: %d (idx=%d)\n", triplet, idx)
+
+		// nothing todo for empty triplet
+		if triplet == 0 {
+			continue
+		}
+
+		// special cases
+		if triplet == 1 && idx == 1 {
+			words = append(words, "mille")
+			continue
+		}
+
+		// three-digits
+		hundreds := triplet / 100 % 10
+		tens := triplet / 10 % 10
+		units := triplet % 10
+		//log.Printf("Hundreds:%d, Tens:%d, Units:%d\n", hundreds, tens, units)
+		if hundreds > 0 {
+			if hundreds == 1 {
+				words = append(words, "cent")
+			} else {
+				if tens == 0 && units == 0 {
+					words = append(words, frenchUnits[hundreds], "cents")
+					goto tripletEnd
 				} else {
-					out = append(out, elem)
+					words = append(words, frenchUnits[hundreds], "cent")
 				}
 			}
 		}
-		val = out
-	}
-	return out[0]
-}
 
-func to_cardinal(value int64) string {
-	out := ""
-	if value < 0 {
-		value = int64(math.Abs(float64(value)))
-		out = negword
+		if tens == 0 && units == 0 {
+			goto tripletEnd
+		}
+
+		switch tens {
+		case 0:
+			words = append(words, frenchUnits[units])
+		case 1:
+			words = append(words, frenchTeens[units])
+			break
+		case 7:
+			switch units {
+			case 1:
+				words = append(words, frenchTens[tens], "et", frenchTeens[units])
+				break
+			default:
+				word := fmt.Sprintf("%s-%s", frenchTens[tens], frenchTeens[units])
+				words = append(words, word)
+				break
+			}
+			break
+		case 8:
+			switch units {
+			case 0:
+				words = append(words, frenchTens[tens]+"s")
+				break
+			default:
+				word := fmt.Sprintf("%s-%s", frenchTens[tens], frenchUnits[units])
+				words = append(words, word)
+				break
+			}
+			break
+		case 9:
+			word := fmt.Sprintf("%s-%s", frenchTens[tens], frenchTeens[units])
+			words = append(words, word)
+			break
+		default:
+			switch units {
+			case 0:
+				words = append(words, frenchTens[tens])
+				break
+			case 1:
+				words = append(words, frenchTens[tens], "et", frenchUnits[units])
+				break
+			default:
+				word := fmt.Sprintf("%s-%s", frenchTens[tens], frenchUnits[units])
+				words = append(words, word)
+				break
+			}
+			break
+		}
+
+	tripletEnd:
+		// mega
+		mega := frenchMegas[idx]
+		if mega != "" {
+			if mega != "mille" && triplet > 1 {
+				mega += "s"
+			}
+			words = append(words, mega)
+		}
 	}
 
-	if value >= MAXVAL { // fail silencieux
-		return ""
-	}
-
-	val := splitnum(value)
-	cleaned := clean(val)
-	return out + cleaned.tN.text
+	//log.Printf("Words length: %d\n", len(words))
+	return strings.Join(words, " ")
 }
 
 // EurosToWords renvoi la somme indiqué, écrite avec des mots
@@ -204,8 +173,8 @@ func EurosToWords(val float64) string {
 	if is_negative {
 		minus_str = fmt.Sprintf("%s ", negword)
 	}
-	cents_str := to_cardinal(right)
-
-	return fmt.Sprintf("%s%s %s%s %s %s", minus_str, to_cardinal(left),
+	cents_str := IntegerToFrFr(int(right))
+	euros_str := IntegerToFrFr(int(left))
+	return fmt.Sprintf("%s%s %s%s %s %s", minus_str, euros_str,
 		pluralizeEuros(left), separator, cents_str, pluralizeCents(right))
 }
