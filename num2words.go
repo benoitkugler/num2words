@@ -2,30 +2,29 @@ package num2words
 
 import (
 	"fmt"
-	"math"
 	"strings"
 )
 
-const negword = "moins "
-
-func pluralizeCents(n int64) string {
+func pluralizeCents(n int) string {
 	if n == 1 {
 		return "centime"
 	}
 	return "centimes"
 }
 
-func pluralizeEuros(n int64) string {
+func pluralizeEuros(n int) string {
 	if n == 1 {
 		return "euro"
 	}
 	return "euros"
 }
 
-func parse_currency_parts(value float64) (int64, int64, bool) {
+func parseCurrencyParts(value int) (int, int, bool) {
 	negative := value < 0
-	inCents := int64(math.Round(value * 100))
-	return inCents / 100, inCents % 100, negative
+	if negative {
+		value = -value
+	}
+	return value / 100, value % 100, negative
 }
 
 func integerToTriplets(number int) []int {
@@ -39,24 +38,17 @@ func integerToTriplets(number int) []int {
 	return triplets
 }
 
-// IntegerToFrFr converts an integer to French words
-func IntegerToFrFr(input int) string {
-	var frenchMegas = []string{"", "mille", "million", "milliard", "billion", "billiard", "trillion", "trilliard", "quadrillion", "quadrilliard", "quintillion", "quintilliard"}
-	var frenchUnits = []string{"", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"}
-	var frenchTens = []string{"", "dix", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante", "quatre-vingt", "quatre-vingt"}
-	var frenchTeens = []string{"dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"}
+// integerToFrFr converts a positive integer to French words
+func integerToFrFr(input int) string {
+	frenchMegas := [...]string{"", "mille", "million", "milliard", "billion", "billiard", "trillion", "trilliard", "quadrillion", "quadrilliard", "quintillion", "quintilliard"}
+	frenchUnits := [...]string{"", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf"}
+	frenchTens := [...]string{"", "dix", "vingt", "trente", "quarante", "cinquante", "soixante", "soixante", "quatre-vingt", "quatre-vingt"}
+	frenchTeens := [...]string{"dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf"}
 
-	//log.Printf("Input: %d\n", input)
 	words := []string{}
-
-	if input < 0 {
-		words = append(words, "moins")
-		input *= -1
-	}
 
 	// split integer in triplets
 	triplets := integerToTriplets(input)
-	//log.Printf("Triplets: %v\n", triplets)
 
 	// zero is a special case
 	if len(triplets) == 0 {
@@ -66,7 +58,6 @@ func IntegerToFrFr(input int) string {
 	// iterate over triplets
 	for idx := len(triplets) - 1; idx >= 0; idx-- {
 		triplet := triplets[idx]
-		//log.Printf("Triplet: %d (idx=%d)\n", triplet, idx)
 
 		// nothing todo for empty triplet
 		if triplet == 0 {
@@ -83,7 +74,6 @@ func IntegerToFrFr(input int) string {
 		hundreds := triplet / 100 % 10
 		tens := triplet / 10 % 10
 		units := triplet % 10
-		//log.Printf("Hundreds:%d, Tens:%d, Units:%d\n", hundreds, tens, units)
 		if hundreds > 0 {
 			if hundreds == 1 {
 				words = append(words, "cent")
@@ -160,21 +150,21 @@ func IntegerToFrFr(input int) string {
 		}
 	}
 
-	//log.Printf("Words length: %d\n", len(words))
 	return strings.Join(words, " ")
 }
 
-// EurosToWords renvoi la somme indiqué, écrite avec des mots
-func EurosToWords(val float64) string {
-	separator := " et" //Cent separator
+// EurosToWords renvoie la somme (indiquée en centimes), écrite avec des mots
+func EurosToWords(val int) string {
+	const separator = " et" // Cent separator
+	const negword = "moins "
 
-	left, right, is_negative := parse_currency_parts(val)
-	minus_str := ""
-	if is_negative {
-		minus_str = fmt.Sprintf("%s ", negword)
+	left, right, isNegative := parseCurrencyParts(val)
+	minusStr := ""
+	if isNegative {
+		minusStr = negword
 	}
-	cents_str := IntegerToFrFr(int(right))
-	euros_str := IntegerToFrFr(int(left))
-	return fmt.Sprintf("%s%s %s%s %s %s", minus_str, euros_str,
-		pluralizeEuros(left), separator, cents_str, pluralizeCents(right))
+	cents := integerToFrFr(right)
+	euros := integerToFrFr(left)
+	return fmt.Sprintf("%s%s %s%s %s %s", minusStr, euros,
+		pluralizeEuros(left), separator, cents, pluralizeCents(right))
 }
